@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบดาวน์โหลดเกียรติบัตร สพป.ปราจีนบุรี เขต 2</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Prompt', sans-serif; background-color: #f8f9fa; }
+    .navbar-brand img { height: 50px; margin-right: 15px; }
+    .hero-section {
+      background: linear-gradient(135deg, #0d6efd, #0dcaf0);
+      color: white;
+      padding: 40px 0;
+      border-radius: 0 0 20px 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .card-cert {
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: none;
+      border-radius: 12px;
+    }
+    .card-cert:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+    }
+    .filter-box {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      margin-bottom: 30px;
+    }
+    #resultCount { font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar navbar-light bg-white shadow-sm">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center" href="#">
+        <img src="https://i.postimg.cc/qvybXQ90/logo-pri2.jpg" alt="Logo">
+        <span class="fw-bold text-primary">สำนักงานเขตพื้นที่การศึกษาประถมศึกษาปราจีนบุรี เขต 2</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="hero-section text-center">
+    <div class="container">
+      <h1 class="fw-bold">ระบบดาวน์โหลดเกียรติบัตร</h1>
+      <p class="lead">ค้นหาและดาวน์โหลดเกียรติบัตรกิจกรรม สพป.ปราจีนบุรี เขต 2</p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="filter-box">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label">🔍 ค้นหาชื่อกิจกรรม</label>
+          <input type="text" id="searchInput" class="form-control" placeholder="พิมพ์คำค้นหา...">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">📅 ปีการศึกษา</label>
+          <select id="yearSelect" class="form-select">
+            <option value="">-- แสดงทุกปีการศึกษา --</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-outline-secondary w-100" onclick="resetFilter()">รีเซ็ต</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 id="sectionTitle" class="fw-bold text-secondary mb-0"></h5>
+      <span id="resultCount" class="text-muted"></span>
+    </div>
+
+    <div id="loading" class="text-center my-5">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-2">กำลังโหลดข้อมูล...</p>
+    </div>
+
+    <div id="errorBox" class="alert alert-danger d-none" role="alert">
+      ❌ ไม่สามารถโหลดข้อมูลได้ กรุณาตรวจสอบการตั้งค่า Sheet หรือลองใหม่อีกครั้ง
+    </div>
+
+    <div id="cardContainer" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-5"></div>
+  </div>
+
+  <script>
+    // ====================================================
+    // ⚙️ ตั้งค่าตรงนี้เพียงจุดเดียว
+    // 1) เปิด Google Sheet → Share → "Anyone with the link" → Viewer
+    // 2) คัดลอก ID จาก URL: docs.google.com/spreadsheets/d/[SHEET_ID]/edit
+    // 3) วาง ID แทนค่าด้านล่าง
+    // ====================================================
+    const SHEET_ID   = 'YOUR_SHEET_ID_HERE';   // ← แก้ตรงนี้
+    const SHEET_NAME = 'Data';                  // ← ชื่อ Sheet (ค่าเริ่มต้น: Data)
+    // ====================================================
+
+    let allData = [];
+
+    window.onload = function () {
+      loadSheetData();
+    };
+
+    function loadSheetData() {
+      const url =
+        `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}`;
+
+      fetch(url)
+        .then(res => {
+          if (!res.ok) throw new Error('Network response was not ok');
+          return res.text();
+        })
+        .then(text => {
+          // Google ส่งกลับในรูป: /*O_o*/google.visualization.Query.setResponse({...});
+          const jsonString = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*?)\);/);
+          if (!jsonString) throw new Error('Invalid response format');
+
+          const json = JSON.parse(jsonString[1]);
+          const rows = json.table.rows;
+
+          const data = rows
+            .map(row => ({
+              date:         row.c[0]?.v || '',
+              activity:     row.c[1]?.v || '',
+              department:   row.c[2]?.v || '',
+              link:         row.c[3]?.v || '#',
+              academicYear: row.c[4]?.v != null ? String(row.c[4].v) : ''
+            }))
+            .filter(item => item.activity); // กรองแถวที่ไม่มีชื่อกิจกรรม
+
+          initData(data);
+        })
+        .catch(err => {
+          console.error('Error loading sheet data:', err);
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('errorBox').classList.remove('d-none');
+        });
+    }
+
+    function initData(data) {
+      // เรียงจากรายการล่าสุด (ล่างขึ้นบน เหมือนเดิม)
+      allData = data.reverse();
+
+      document.getElementById('loading').style.display = 'none';
+
+      buildYearOptions(allData);
+      displayCards(allData);
+    }
+
+    function buildYearOptions(data) {
+      const years = [...new Set(data.map(item => item.academicYear).filter(Boolean))]
+        .sort((a, b) => b - a);
+      const select = document.getElementById('yearSelect');
+      years.forEach(year => {
+        const opt = document.createElement('option');
+        opt.value = year;
+        opt.textContent = `ปีการศึกษา ${year}`;
+        select.appendChild(opt);
+      });
+    }
+
+    function displayCards(data) {
+      const container = document.getElementById('cardContainer');
+      container.innerHTML = '';
+
+      const searchText  = document.getElementById('searchInput').value.trim();
+      const selectedYear = document.getElementById('yearSelect').value;
+
+      document.getElementById('sectionTitle').textContent =
+        (!searchText && !selectedYear) ? 'รายการกิจกรรมทั้งหมด' : '🔍 ผลการค้นหา';
+      document.getElementById('resultCount').textContent = `พบ ${data.length} รายการ`;
+
+      if (data.length === 0) {
+        container.innerHTML =
+          '<div class="col-12 text-center text-muted py-5"><p>ไม่พบข้อมูลกิจกรรมที่ค้นหา</p></div>';
+        return;
+      }
+
+      data.forEach(item => {
+        container.innerHTML += `
+          <div class="col">
+            <div class="card h-100 card-cert shadow-sm">
+              <div class="card-body d-flex flex-column">
+                <div class="mb-2 d-flex justify-content-between align-items-center flex-wrap gap-1">
+                  <span class="badge bg-info text-dark">${item.department || ''}</span>
+                  ${item.academicYear
+                    ? `<span class="badge bg-light text-secondary border">ปีการศึกษา ${item.academicYear}</span>`
+                    : ''}
+                </div>
+                <h5 class="card-title fw-bold text-dark mt-2">${item.activity}</h5>
+                <small class="text-muted mb-3">${item.date}</small>
+                <a href="${item.link || '#'}" target="_blank"
+                   class="btn btn-outline-primary mt-auto w-100 fw-medium">
+                  📥 ดาวน์โหลดเกียรติบัตร
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function filterData() {
+      const searchText   = document.getElementById('searchInput').value.toLowerCase().trim();
+      const selectedYear = document.getElementById('yearSelect').value;
+
+      const filtered = allData.filter(item => {
+        const matchName = !searchText || item.activity.toLowerCase().includes(searchText);
+        const matchYear = !selectedYear || String(item.academicYear) === String(selectedYear);
+        return matchName && matchYear;
+      });
+
+      displayCards(filtered);
+    }
+
+    function resetFilter() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('yearSelect').value  = '';
+      displayCards(allData);
+    }
+
+    document.getElementById('searchInput').addEventListener('input', filterData);
+    document.getElementById('yearSelect').addEventListener('change', filterData);
+  </script>
+</body>
+</html>
